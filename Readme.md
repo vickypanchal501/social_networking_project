@@ -95,3 +95,39 @@ Explain how to use your project once it's installed. Include any configuration s
   - URL: `/friend-requests/list-pending-requests/`
   - Authentication: Basic authentication required.
   - Response: JSON array containing pending friend requests.
+
+
+#### user-search api
+
+- **show all data according to search**: This API allows users to search for other users by email or username.
+  - Method: GET
+  - URL: `/user-search/?q=user`
+  - `q` (required): (q is mention in parmss like q : "serach perameter" ).The search query to find users by email or username.
+  - Authentication: Basic authentication required.
+  - Response: JSON array containing pending friend requests.
+  - output Body:
+    ```json
+      {
+          "count": 5,
+          "next": null,
+          "previous": null,
+          "results": [
+              {
+                  "email": "user1@gmail.com"
+              },
+              {
+                  "email": "user2@example.com"
+              },
+              {
+                  "email": "user3@example.com"
+              }
+          ]
+      }
+    ```
+
+#### Add pagination
+- **add pagination in user-search api**: The default page size is 10, but it can be customized using the page_size query parameter.
+  - Method: GET
+  - URL: `/user-search/?q=johndoe&page_size=20`
+  - `q` (required): (q is mention in parmss like q : "serach perameter" ).The search query to find users by email or username.
+

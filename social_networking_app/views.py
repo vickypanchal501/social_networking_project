@@ -1,52 +1,54 @@
-from rest_framework import viewsets, status, permissions
+from datetime import datetime, timedelta
+
+from django.contrib.auth import authenticate
+from rest_framework import permissions, status, viewsets
+from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import  PermissionDenied
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .models import FriendRequest, Friend, CustomUser
-from .serializers import (
-    FriendRequestSerializer,
-    FriendSerializer,
-    UserSignupSerializer,
-    UserLoginSerializer,
-)
-from datetime import datetime, timedelta
-from django.db.models import Q
-from rest_framework.authtoken.models import Token
-from django.contrib.auth import authenticate
-from rest_framework.permissions import IsAuthenticated
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
-from rest_framework.pagination import PageNumberPagination
+
+from .models import CustomUser, Friend, FriendRequest
+from .serializers import (FriendRequestSerializer, FriendSerializer,
+                          UserLoginSerializer, UserSignupSerializer)
 
 
 class FriendViewSet(viewsets.ModelViewSet):
+    # ViewSet for managing friend relationships
     serializer_class = FriendSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        # Filter friends based on the current user
         user = self.request.user
         queryset = Friend.objects.filter(user=user)
-
         return queryset
 
 
 class CustomPagination(PageNumberPagination):
+    # Custom pagination class
     page_size = 10
     page_size_query_param = "page_size"
     max_page_size = 100
 
 
 class UserSearchViewSet(viewsets.ViewSet):
+    # ViewSet for searching users
     pagination_class = CustomPagination
 
     def list(self, request):
+        # Search for users based on the provided query parameter
         search_keyword = request.query_params.get("q")
         if search_keyword:
+            # Filter users by email and username
             users_by_email = CustomUser.objects.filter(email__icontains=search_keyword)
             users_by_name = CustomUser.objects.filter(
                 username__icontains=search_keyword
             )
             users = users_by_email | users_by_name  # Merge querysets
 
-            # Use the pagination class to paginate the queryset
+            # Paginate the queryset
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(users, request)
             if page is not None:
@@ -60,16 +62,18 @@ class UserSearchViewSet(viewsets.ViewSet):
 
 
 class FriendRequestViewSet(viewsets.ViewSet):
+    # ViewSet for managing friend requests
     permission_classes = [
         IsAuthenticated
-    ]  # Ensures user is authenticated to access this endpoint
+    ]  # Ensure user is authenticated to access this endpoint
 
     def create(self, request):
-        # Check if the user has sent more than 3 friend requests within the last minute
+        # Create a new friend request
         time_threshold = datetime.now() - timedelta(minutes=1)
         recent_requests_count = FriendRequest.objects.filter(
             from_user=request.user, created_at__gte=time_threshold
         ).count()
+        # if user send multiple firend request in one minutes. show error
         if recent_requests_count >= 3:
             return Response(
                 {
@@ -117,62 +121,70 @@ class FriendRequestViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def accept(self, request, pk):
-        friend_request = self.get_friend_request(pk)
-        if friend_request.to_user != request.user:
+        # Accept a friend request
+        try:
+            friend_request = self.get_friend_request(pk)  # get friend_request object id
+        except FriendRequest.DoesNotExist:
             return Response(
-                {"error": "You are not authorized to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "Friend request not found."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        if friend_request.accepted:
+        try:
+            # user is not authorized
+            if friend_request.to_user != request.user:
+                raise PermissionDenied("You are not authorized to perform this action.")
+            elif friend_request.accepted:
+                return Response(
+                    {"error": "This friend request has already been accepted."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            else:
+                friend_request.accept()  # Accept friends request
+                friend_request.delete() # Delete friends request
+        except AttributeError:
             return Response(
-                {"error": "This friend request has already been accepted."},
-                status=status.HTTP_400_BAD_REQUEST,
+                {
+                    "error": "The friend request object does not have 'to_user' attribute. Please ensure your friend request ID."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        friend_request.accept()
-        return Response({"detail": "Friend request accepted successfully."})
+        return Response({"detail": "Friend request Accepted successfully."})
 
     def reject(self, request, pk):
-        friend_request = self.get_friend_request(pk)
-        if friend_request.to_user != request.user:
+        # Reject a friend request
+        try:
+            friend_request = self.get_friend_request(pk)  # get friend_request object id
+        except FriendRequest.DoesNotExist:
             return Response(
-                {"error": "You are not authorized to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "Friend request not found."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        # # Check if the friend request is already accepted or rejected
-        if friend_request.accepted:
-            try:
-                friend = Friend.objects.get(
-                    user=request.user, friend=friend_request.from_user
-                )
-                friend.delete()
-            except ObjectDoesNotExist:
-                # Handle the case where no Friend object is found
+        try:
+            # user is not authorized
+            if friend_request.to_user != request.user:
+                raise PermissionDenied("You are not authorized to perform this action.")
+            elif friend_request.accepted:
                 return Response(
-                    {"error": "No friend object found for the given query parameters."},
-                    status=status.HTTP_404_NOT_FOUND,
+                    {"error": "This friend request has already been accepted."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            except MultipleObjectsReturned:
-                # Handle the case where multiple Friend objects are returned
-                return Response(
-                    {
-                        "error": "Multiple friend objects found for the given query parameters."
-                    },
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
+            else:
+                friend_request.reject()  # reject friends request
+        except AttributeError:
             return Response(
-                {"error": "This friend request Reject Successfull "},
-                status=status.HTTP_400_BAD_REQUEST,
+                {
+                    "error": "The friend request object does not have 'to_user' attribute. Please ensure your friend request ID."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
-        friend_request.reject()
-
+        # send successful message
         return Response({"detail": "Friend request rejected successfully."})
 
     def get_friend_request(self, pk):
+        # Helper function to get a friend request by its ID
         try:
             return FriendRequest.objects.get(pk=pk)
         except FriendRequest.DoesNotExist:
@@ -180,43 +192,28 @@ class FriendRequestViewSet(viewsets.ViewSet):
                 {"error": "Friend request not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
-    def list_friends(self, request):
-        friends = Friend.objects.filter(Q(user=request.user) | Q(friend=request.user))
-        friend_user_ids = list(
-            set(
-                [
-                    friend.user.id if friend.user != request.user else friend.friend.id
-                    for friend in friends
-                ]
-            )
-        )
-        friends_list = CustomUser.objects.filter(id__in=friend_user_ids)
-        serializer = UserSignupSerializer(friends_list, many=True)
-        return Response(serializer.data)
-
     def list_pending_requests(self, request):
-        # Filter friend requests where the current user is the to_user
+        # List pending friend requests for the current user
         friend_requests = FriendRequest.objects.filter(
             to_user=request.user, accepted=False
         )
-        friend_requests_with_emails = []
+        friend_requests_with_emails = (
+            []
+        )  # this list store a  from_user email after filter a data according to request user
         for request in friend_requests:
             from_user_email = request.from_user.email
             friend_requests_with_emails.append({"from_user_email": from_user_email})
-            print(request.from_user.email)
         return Response(friend_requests_with_emails, status=status.HTTP_200_OK)
 
 
-from rest_framework.permissions import AllowAny
-
-
 class UserSignupView(APIView):
-    permission_classes = [AllowAny]
+    # API view for user registration/signup
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         serializer = UserSignupSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save()  # save data in over database after vaildate signup
             return Response(
                 {"message": "User created successfully"}, status=status.HTTP_201_CREATED
             )
@@ -224,15 +221,17 @@ class UserSignupView(APIView):
 
 
 class UserLoginView(APIView):
+    # API view for user login/authentication
     serializer_class = UserLoginSerializer
 
+    # post api for user login
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(
             data=request.data, context={"request": request}
         )
         if serializer.is_valid():
-            email = serializer.validated_data.get("email")
-            password = serializer.validated_data.get("password")
+            email = serializer.validated_data.get("email")  # get email data
+            password = serializer.validated_data.get("password")  # get password
 
             # Authenticate user
             user = authenticate(email=email, password=password)

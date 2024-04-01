@@ -1,31 +1,26 @@
+from django.contrib.auth import authenticate
 from rest_framework import serializers
 
-from django.core.validators import EmailValidator
-
-from .models import FriendRequest, Friend, CustomUser
-from django.contrib.auth import authenticate
+from .models import CustomUser, Friend, FriendRequest
 
 
 class UserSignupSerializer(serializers.ModelSerializer):
+    # Serializer for user signup
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
 
     class Meta:
         model = CustomUser
-        fields = [
-            "email",
-            "password",
-            "confirm_password",
-        ]  # Include confirm_password field
+        fields = ["email", "password", "confirm_password"]
 
     def validate(self, data):
-        if data["password"] != data.pop(
-            "confirm_password", None
-        ):  # Use dict.get to safely pop confirm_password
+        # Validate that password and confirm_password match
+        if data["password"] != data.pop("confirm_password", None):
             raise serializers.ValidationError("Passwords do not match")
         return data
 
     def create(self, validated_data):
+        # Create a new user
         validated_data.pop(
             "confirm_password", None
         )  # Remove confirm_password if exists
@@ -34,16 +29,18 @@ class UserSignupSerializer(serializers.ModelSerializer):
 
 
 class UserLoginSerializer(serializers.Serializer):
+    # Serializer for user login
     email = serializers.EmailField()
     password = serializers.CharField()
 
     def validate(self, data):
+        # Validate email and password
         email = data.get("email")
         password = data.get("password")
 
         if email and password:
+            # authenticate user
             user = authenticate(email=email, password=password)
-
             if not user:
                 raise serializers.ValidationError(
                     "Unable to log in with provided credentials."
@@ -56,6 +53,7 @@ class UserLoginSerializer(serializers.Serializer):
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):
+    # Serializer for friend requests
     to_user = serializers.EmailField()
 
     class Meta:
@@ -64,6 +62,7 @@ class FriendRequestSerializer(serializers.ModelSerializer):
 
 
 class FriendSerializer(serializers.ModelSerializer):
+    # Serializer for friends
     class Meta:
         model = Friend
         fields = "__all__"

@@ -1,18 +1,12 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from social_networking_app.views import (
-    FriendRequestViewSet,
-    UserSearchViewSet,
-    UserLoginView,
-    UserSignupView,
-    FriendViewSet,
-)
+
+from social_networking_app.views import (FriendRequestViewSet, FriendViewSet,
+                                         UserLoginView, UserSearchViewSet,
+                                         UserSignupView)
 
 router = DefaultRouter()
 router.register(r"friends", FriendViewSet, basename="friends")
-
-# router = DefaultRouter()
-# router.register(r'friend-requests', FriendRequestViewSet, basename='friend-request')
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -31,7 +25,6 @@ urlpatterns = [
         FriendRequestViewSet.as_view({"post": "accept"}),
         name="friend-requests-accept",
     ),
-    # path('friend-requests/list/', FriendRequestViewSet.as_view({'get': 'get_friend_request'}), name='get_friend_request'),
     path(
         "friend-requests/<int:pk>/reject/",
         FriendRequestViewSet.as_view({"post": "reject"}),
@@ -48,10 +41,3 @@ urlpatterns = [
         name="list-pending-requests",
     ),
 ]
-
-
-# path('list-friends/', FriendRequestViewSet.as_view({'get': 'list_friends'}), name='list-friends'),
-# path('list-pending-requests/', FriendRequestViewSet.as_view({'get': 'list_pending_requests'}), name='list-pending-requests'),
-# router.register(r'users', UserViewSet, basename='users')
-# router.register(r'friend-requests', FriendRequestViewSet, basename='friend-requests')
-# router.register(r'user-search', UserSearchViewSet, basename='user-search')

@@ -1,11 +1,10 @@
-from django.contrib.auth.models import User
 from django.contrib.auth.models import AbstractUser, BaseUserManager
-
 from django.db import models
 
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
+        # Create a new user with the given email and password
         if not email:
             raise ValueError("The Email field must be set")
         email = self.normalize_email(email)
@@ -15,6 +14,7 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        # Create a new superuser with the given email and password
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
@@ -27,6 +27,7 @@ class CustomUserManager(BaseUserManager):
 
 
 class CustomUser(AbstractUser):
+    # Custom user model extending AbstractUser
     email = models.EmailField(unique=True)
     username = models.CharField(
         max_length=150, blank=True, null=True
@@ -41,6 +42,7 @@ class CustomUser(AbstractUser):
 
 
 class FriendRequest(models.Model):
+    # Model to represent friend requests
     from_user = models.ForeignKey(
         CustomUser, related_name="sent_friend_requests", on_delete=models.CASCADE
     )
@@ -51,6 +53,7 @@ class FriendRequest(models.Model):
     accepted = models.BooleanField(default=False)
 
     def accept(self):
+        # Accept the friend request and create a friendship
         self.accepted = True
         self.save()
         # Create a new friend object to represent the friendship
@@ -58,10 +61,12 @@ class FriendRequest(models.Model):
         Friend.objects.create(user=self.to_user, friend=self.from_user)
 
     def reject(self):
+        # Reject the friend request
         self.delete()
 
 
 class Friend(models.Model):
+    # Model to represent friendships
     user = models.ForeignKey(
         CustomUser, related_name="friends", on_delete=models.CASCADE
     )
