@@ -12,53 +12,69 @@ from rest_framework.views import APIView
 from .models import CustomUser, Friend, FriendRequest
 from .serializers import (FriendRequestSerializer, FriendSerializer,
                           UserLoginSerializer, UserSignupSerializer)
+import logging
+from django.http import HttpResponse
 
 
-class FriendViewSet(viewsets.ModelViewSet):
-    # ViewSet for managing friend relationships
-    serializer_class = FriendSerializer
-    permission_classes = [permissions.IsAuthenticated]
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
-    def get_queryset(self):
-        # Filter friends based on the current user
-        user = self.request.user
-        queryset = Friend.objects.filter(user=user)
-        return queryset
+def my_view(request):
+    logger.debug('This is a debug message')
+    logger.info('This is an info message')
+    logger.warning('This is a warning message')
+    logger.error('This is an error message')
+    logger.critical('This is a critical message')
 
+    return HttpResponse('Logged some messages')
 
-class CustomPagination(PageNumberPagination):
-    # Custom pagination class
-    page_size = 10
-    page_size_query_param = "page_size"
-    max_page_size = 100
+class UserSignupView(APIView):
+    # API view for user registration/signup
+    permission_classes = [permissions.AllowAny]
 
-
-class UserSearchViewSet(viewsets.ViewSet):
-    # ViewSet for searching users
-    pagination_class = CustomPagination
-
-    def list(self, request):
-        # Search for users based on the provided query parameter
-        search_keyword = request.query_params.get("q")
-        if search_keyword:
-            # Filter users by email and username
-            users_by_email = CustomUser.objects.filter(email__icontains=search_keyword)
-            users_by_name = CustomUser.objects.filter(
-                username__icontains=search_keyword
+    def post(self, request):
+        serializer = UserSignupSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()  # save data in over database after vaildate signup
+            return Response(
+                {"message": "User created successfully"}, status=status.HTTP_201_CREATED
             )
-            users = users_by_email | users_by_name  # Merge querysets
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            # Paginate the queryset
-            paginator = self.pagination_class()
-            page = paginator.paginate_queryset(users, request)
-            if page is not None:
-                serializer = UserSignupSerializer(page, many=True)
-                return paginator.get_paginated_response(serializer.data)
 
-            serializer = UserSignupSerializer(users, many=True)
-            return Response(serializer.data)
-        else:
-            return Response({"error": "Search keyword 'q' is required."}, status=400)
+class UserLoginView(APIView):
+    # API view for user login/authentication
+    serializer_class = UserLoginSerializer
+
+    # post api for user login
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(
+            data=request.data, context={"request": request}
+        )
+        if serializer.is_valid():
+            email = serializer.validated_data.get("email")  # get email data
+            password = serializer.validated_data.get("password")  # get password
+
+            # Authenticate user
+            user = authenticate(email=email, password=password)
+            if user is not None:
+                # User authenticated, generate or retrieve token
+                token, created = Token.objects.get_or_create(user=user)
+                return Response(
+                    {"message": "User login successful", "token": token.key},
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                # Authentication failed
+                return Response(
+                    {"error": "Invalid email or password"},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+
 
 
 class FriendRequestViewSet(viewsets.ViewSet):
@@ -206,46 +222,51 @@ class FriendRequestViewSet(viewsets.ViewSet):
         return Response(friend_requests_with_emails, status=status.HTTP_200_OK)
 
 
-class UserSignupView(APIView):
-    # API view for user registration/signup
-    permission_classes = [permissions.AllowAny]
 
-    def post(self, request):
-        serializer = UserSignupSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()  # save data in over database after vaildate signup
-            return Response(
-                {"message": "User created successfully"}, status=status.HTTP_201_CREATED
+class CustomPagination(PageNumberPagination):
+    # Custom pagination class
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
+class UserSearchViewSet(viewsets.ViewSet):
+    # ViewSet for searching users
+    pagination_class = CustomPagination
+
+    def list(self, request):
+        # Search for users based on the provided query parameter
+        search_keyword = request.query_params.get("q")
+        if search_keyword:
+            # Filter users by email and username
+            users_by_email = CustomUser.objects.filter(email__icontains=search_keyword)
+            users_by_name = CustomUser.objects.filter(
+                username__icontains=search_keyword
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            users = users_by_email | users_by_name  # Merge querysets
+
+            # Paginate the queryset
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(users, request)
+            if page is not None:
+                serializer = UserSignupSerializer(page, many=True)
+                return paginator.get_paginated_response(serializer.data)
+
+            serializer = UserSignupSerializer(users, many=True)
+            return Response(serializer.data)
+        else:
+            return Response({"error": "Search keyword 'q' is required."}, status=400)
 
 
-class UserLoginView(APIView):
-    # API view for user login/authentication
-    serializer_class = UserLoginSerializer
 
-    # post api for user login
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            email = serializer.validated_data.get("email")  # get email data
-            password = serializer.validated_data.get("password")  # get password
+class FriendViewSet(viewsets.ModelViewSet):
+    # ViewSet for managing friend relationships
+    serializer_class = FriendSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-            # Authenticate user
-            user = authenticate(email=email, password=password)
-            if user is not None:
-                # User authenticated, generate or retrieve token
-                token, created = Token.objects.get_or_create(user=user)
-                return Response(
-                    {"message": "User login successful", "token": token.key},
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                # Authentication failed
-                return Response(
-                    {"error": "Invalid email or password"},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get_queryset(self):
+        # Filter friends based on the current user
+        user = self.request.user
+        queryset = Friend.objects.filter(user=user)
+        return queryset
+
