@@ -141,6 +141,12 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'social_networking_app.throttles.FriendRequestThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'friend_request': '3/minute',
+    }
 }
 
 AUTHENTICATION_BACKENDS = [

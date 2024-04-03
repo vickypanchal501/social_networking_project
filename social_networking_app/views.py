@@ -14,6 +14,8 @@ from .serializers import (FriendRequestSerializer, FriendSerializer,
                           UserLoginSerializer, UserSignupSerializer)
 import logging
 from django.http import HttpResponse
+from .throttles import FriendRequestThrottle
+from rest_framework import generics
 
 
 # Get an instance of a logger
@@ -82,22 +84,9 @@ class FriendRequestViewSet(viewsets.ViewSet):
     permission_classes = [
         IsAuthenticated
     ]  # Ensure user is authenticated to access this endpoint
+    throttle_classes = [FriendRequestThrottle]
 
     def create(self, request):
-        # Create a new friend request
-        time_threshold = datetime.now() - timedelta(minutes=1)
-        recent_requests_count = FriendRequest.objects.filter(
-            from_user=request.user, created_at__gte=time_threshold
-        ).count()
-        # if user send multiple firend request in one minutes. show error
-        if recent_requests_count >= 3:
-            return Response(
-                {
-                    "error": "You cannot send more than 3 friend requests within a minute."
-                },
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )
-
         serializer = FriendRequestSerializer(data=request.data)
         if serializer.is_valid():
             # Extract the email of the user to whom the friend request is being sent
@@ -135,7 +124,8 @@ class FriendRequestViewSet(viewsets.ViewSet):
                 status=status.HTTP_201_CREATED,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    
+class FriendRequestStatus(viewsets.ViewSet):
     def accept(self, request, pk):
         # Accept a friend request
         try:
@@ -224,25 +214,33 @@ class FriendRequestViewSet(viewsets.ViewSet):
 
 
 class CustomPagination(PageNumberPagination):
-    # Custom pagination class
-    page_size = 10
-    page_size_query_param = "page_size"
-    max_page_size = 100
+    page_size = 10  # Specify the number of items per page
+    page_size_query_param = 'page_size'
+    max_page_size = 1000  # Optionally specify the maximum page size
 
+    def get_paginated_response(self, data):
+        return Response({
+            'next': self.get_next_link(),
+            'previous': self.get_previous_link(),
+            'count': self.page.paginator.count,
+            'results': data
+        })
 
 class UserFilter(django_filters.FilterSet):
     class Meta:
         model = CustomUser
         fields = ['email', 'username']  # Define the fields you want to filter on
+
+
 class UserSearchViewSet(viewsets.ViewSet):
-    pagination_class = CustomPagination
+    pagination_class = CustomPagination  # Use the custom pagination class
     filter_backends = [DjangoFilterBackend]  # Specify the filter backend
     filterset_class = UserFilter  # Specify the filter class
 
     def list(self, request):
         search_keyword = request.query_params.get('q')
         if search_keyword:
-            users = CustomUser.objects.all()
+            users = CustomUser.objects.all().order_by('id')  # Example ordering by id, replace with appropriate field
 
             # Apply pagination
             paginator = self.pagination_class()
@@ -255,15 +253,16 @@ class UserSearchViewSet(viewsets.ViewSet):
             return Response(serializer.data)
         else:
             return Response({"error": "Search keyword 'q' is required."}, status=400)
-
-class FriendViewSet(viewsets.ModelViewSet):
+        
+class FriendViewSet(generics.ListAPIView):
     # ViewSet for managing friend relationships
     serializer_class = FriendSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = CustomPagination  # Use the custom pagination class
 
     def get_queryset(self):
         # Filter friends based on the current user
         user = self.request.user
-        queryset = Friend.objects.filter(user=user)
+        queryset = Friend.objects.filter(user=user).order_by('id')
         return queryset
 
