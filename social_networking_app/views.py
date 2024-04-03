@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-
+import django_filters
 from django.contrib.auth import authenticate
 from rest_framework import permissions, status, viewsets
 from rest_framework.authtoken.models import Token
@@ -8,7 +8,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import CustomUser, Friend, FriendRequest
 from .serializers import (FriendRequestSerializer, FriendSerializer,
                           UserLoginSerializer, UserSignupSerializer)
@@ -230,22 +230,21 @@ class CustomPagination(PageNumberPagination):
     max_page_size = 100
 
 
+class UserFilter(django_filters.FilterSet):
+    class Meta:
+        model = CustomUser
+        fields = ['email', 'username']  # Define the fields you want to filter on
 class UserSearchViewSet(viewsets.ViewSet):
-    # ViewSet for searching users
     pagination_class = CustomPagination
+    filter_backends = [DjangoFilterBackend]  # Specify the filter backend
+    filterset_class = UserFilter  # Specify the filter class
 
     def list(self, request):
-        # Search for users based on the provided query parameter
-        search_keyword = request.query_params.get("q")
+        search_keyword = request.query_params.get('q')
         if search_keyword:
-            # Filter users by email and username
-            users_by_email = CustomUser.objects.filter(email__icontains=search_keyword)
-            users_by_name = CustomUser.objects.filter(
-                username__icontains=search_keyword
-            )
-            users = users_by_email | users_by_name  # Merge querysets
+            users = CustomUser.objects.all()
 
-            # Paginate the queryset
+            # Apply pagination
             paginator = self.pagination_class()
             page = paginator.paginate_queryset(users, request)
             if page is not None:
@@ -256,8 +255,6 @@ class UserSearchViewSet(viewsets.ViewSet):
             return Response(serializer.data)
         else:
             return Response({"error": "Search keyword 'q' is required."}, status=400)
-
-
 
 class FriendViewSet(viewsets.ModelViewSet):
     # ViewSet for managing friend relationships

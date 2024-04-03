@@ -53,9 +53,11 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "social_networking_app",
     "rest_framework",
     "rest_framework.authtoken",
+    'django_filters',
+    "social_networking_app",
+
 ]
 AUTH_USER_MODEL = "social_networking_app.CustomUser"
 
@@ -135,6 +137,9 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
         "rest_framework.authentication.TokenAuthentication",
+    ],
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
     ],
 }
 
