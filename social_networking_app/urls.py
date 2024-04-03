@@ -1,9 +1,16 @@
-from django.urls import path
-from social_networking_app.views import (FriendRequestViewSet, FriendViewSet,
-                                         UserLoginView, UserSearchViewSet,
-                                         UserSignupView, FriendRequestStatus)
+from django.urls import include, path
+
+from social_networking_app.views import (
+    FriendRequestStatus,
+    FriendRequestViewSet,
+    FriendViewSet,
+    UserLoginView,
+    UserSearchViewSet,
+    UserSignupView,
+)
 
 urlpatterns = [
+    path("accounts/", include("allauth.urls")),
     path("login/", UserLoginView.as_view(), name="login"),
     path("signup/", UserSignupView.as_view(), name="signup"),
     path("friend-list/", FriendViewSet.as_view(), name="friend-list"),
