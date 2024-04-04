@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Determine the current environment
-ENVIRONMENT = os.environ.get('DJANGO_ENV', 'development')
+ENVIRONMENT = os.getenv('DJANGO_ENV', 'development')
 
 # Load settings based on the environment
 if ENVIRONMENT == 'production':
@@ -188,9 +188,6 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
-
-
-# settings.py
 
 LOGGING = {
     'version': 1,
