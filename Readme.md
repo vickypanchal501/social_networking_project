@@ -19,7 +19,7 @@ The Social Networking Application is a platform designed to facilitate social in
 
 ### Using Docker
 
-1. Clone the repository: `git clone https://github.com/your_username/your_project.git`
+1. Clone the repository: `git clone https://github.com/vickypanchal501/social_networking_project.git`
 2. Navigate to the project directory: `cd your_project`
 3. Build the Docker image: `docker-compose build`
 4. Start the Docker containers: `docker-compose up`
