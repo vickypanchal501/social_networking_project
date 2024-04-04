@@ -26,8 +26,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# DEBUG
-DEBUG = os.getenv('DEBUG')
+# Determine the current environment
+ENVIRONMENT = os.environ.get('DJANGO_ENV', 'development')
+
+# Load settings based on the environment
+if ENVIRONMENT == 'production':
+    from .production import *
+else:
+    from .development import *
 
 # Secret key
 SECRET_KEY = os.getenv('SECRET_KEY')
@@ -41,7 +47,7 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 # SECURITY WARNING: don't run with debug turned on in production!
 # DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -125,6 +131,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 
 USE_TZ = True
+STATIC_URL = "./static/"
 
 STATIC_URL = "static/"
 
@@ -158,10 +165,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
-        # Needed to login by username in Django admin, regardless of `allauth`
     "django.contrib.auth.backends.ModelBackend",
-
-    # `allauth` specific authentication methods, such as login by e-mail
     "allauth.account.auth_backends.AuthenticationBackend",
 ]
 
@@ -176,3 +180,39 @@ ACCOUNT_UNIQUE_EMAIL = True
 
 LOGIN_REDIRECT_URL = 'friend-list'
 ACCOUNT_LOGOUT_REDIRECT_URL = '/'
+
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+
+
+# settings.py
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR /'logger.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s [%(levelname)s] %(module)s %(message)s'
+        },
+    },
+}

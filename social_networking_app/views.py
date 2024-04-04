@@ -1,89 +1,21 @@
 import logging
 import django_filters
-from django.contrib.auth import authenticate
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, permissions, status, viewsets
-from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
-
 from .models import CustomUser, Friend, FriendRequest
 from .serializers import (
     FriendRequestSerializer,
     FriendSerializer,
-    UserLoginSerializer,
-    UserSignupSerializer,
+    UserSignupSerializer
 )
 from .throttles import FriendRequestThrottle
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
-
-
-class UserSignupView(APIView):
-    """
-    API view for user registration/signup.
-    """
-
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request):
-        """
-        Handle POST request for user registration/signup.
-        """
-        logger.info("User signup request received")  # Log an info message
-        serializer = UserSignupSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()  # save data in over database after validate signup
-            logger.info("User created successfully")  # Log an info message
-            return Response(
-                {"message": "User created successfully"}, status=status.HTTP_201_CREATED
-            )
-        logger.error("User signup request failed")  # Log an error message
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-class UserLoginView(APIView):
-    """
-    API view for user login/authentication.
-    """
-
-    serializer_class = UserLoginSerializer
-
-    def post(self, request, *args, **kwargs):
-        """
-        Handle POST request for user login/authentication.
-        """
-        logger.info("User login request received")  # Log an info message
-        serializer = self.serializer_class(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            email = serializer.validated_data.get("email")  # get email data
-            password = serializer.validated_data.get("password")  # get password
-
-            # Authenticate user
-            user = authenticate(email=email, password=password)
-            if user is not None:
-                # User authenticated, generate or retrieve token
-                token, created = Token.objects.get_or_create(user=user)
-                logger.info("User login successful")  # Log an info message
-                return Response(
-                    {"message": "User login successful", "token": token.key},
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                # Authentication failed
-                logger.warning("Invalid email or password")  # Log a warning message
-                return Response(
-                    {"error": "Invalid email or password"},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
-        logger.error("User login request failed")  # Log an error message
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class FriendRequestViewSet(viewsets.ViewSet):
