@@ -56,12 +56,24 @@ class FriendRequestViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            existing_request = FriendRequest.objects.filter(
+            existing_request_to_user = FriendRequest.objects.filter(
+                from_user=to_user, to_user=request.user
+            ).exists()
+            if existing_request_to_user:
+                logger.warning(
+                    "User attempted to send a friend request to a user who has already sent them a request"
+                )  # Log a warning message
+                return Response(
+                    {"error": "You cannot send a friend request to someone who has already sent you a request."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            existing_request_from_user = FriendRequest.objects.filter(
                 from_user=request.user, to_user=to_user
             ).exists()
-            if existing_request:
+            if existing_request_from_user:
                 logger.warning(
-                    "User attempted to send duplicate friend request"
+                    "User attempted to send a duplicate friend request"
                 )  # Log a warning message
                 return Response(
                     {"error": "You have already sent a friend request to this user."},
@@ -78,7 +90,6 @@ class FriendRequestViewSet(viewsets.ViewSet):
             "Invalid data provided for friend request creation"
         )  # Log an error message
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class FriendRequestStatus(viewsets.ViewSet):
     """
