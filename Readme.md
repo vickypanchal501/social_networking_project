@@ -37,13 +37,12 @@ Explain how to use your project once it's installed. Include any configuration s
 
 - **Create User**: Endpoint to register a new user.
   - Method: POST
-  - URL: `/signup/`
+  - URL: `accounts/signup/`
   - Request Body:
     ```json
     {
         "email": "user@example.com",
-        "password": "your_password",
-        "confirm_password": "your_password"
+        "password": "your_password"
     }
     ```
   - Response: JSON object indicating success or failure.
@@ -52,7 +51,7 @@ Explain how to use your project once it's installed. Include any configuration s
 
 - **User Login**: Endpoint to authenticate a user using basic authentication.
   - Method: POST
-  - URL: `/login/`
+  - URL: `accounts/login/`
   - Authentication: Basic authentication (username and password)
   - Response: JSON object indicating success or failure.
 
