@@ -13,9 +13,13 @@ from .serializers import (
     UserSignupSerializer
 )
 from .throttles import FriendRequestThrottle
+import sentry_sdk
+from rest_framework import filters
+from django.db.models import Q
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
+
 
 
 class FriendRequestViewSet(viewsets.ViewSet):
@@ -32,65 +36,71 @@ class FriendRequestViewSet(viewsets.ViewSet):
         """
         Handle POST request for creating friend requests.
         """
-        logger.info("Friend request creation request received")  # Log an info message
-        serializer = FriendRequestSerializer(data=request.data)
-        if serializer.is_valid():
-            to_email = serializer.validated_data.get("to_user")
-            try:
-                to_user = CustomUser.objects.get(email=to_email)
-            except CustomUser.DoesNotExist:
-                logger.error(
-                    f"User with email {to_email} does not exist."
-                )  # Log an error message
-                return Response(
-                    {"error": f"User with email {to_email} does not exist."},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
+        try:
+            logger.info("Friend request creation request received")  # Log an info message
+            serializer = FriendRequestSerializer(data=request.data)
+            if serializer.is_valid():
+                to_email = serializer.validated_data.get("to_user")
+                try:
+                    to_user = CustomUser.objects.get(email=to_email)
+                except CustomUser.DoesNotExist:
+                    logger.error(
+                        f"User with email {to_email} does not exist."
+                    )  # Log an error message
+                    return Response(
+                        {"error": f"User with email {to_email} does not exist."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
 
-            if to_user == request.user:
-                logger.warning(
-                    "User attempted to send a friend request to themselves"
-                )  # Log a warning message
-                return Response(
-                    {"error": "You cannot send a friend request to yourself."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                if to_user == request.user:
+                    logger.warning(
+                        "User attempted to send a friend request to themselves"
+                    )  # Log a warning message
+                    return Response(
+                        {"error": "You cannot send a friend request to yourself."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            existing_request_to_user = FriendRequest.objects.filter(
-                from_user=to_user, to_user=request.user
-            ).exists()
-            if existing_request_to_user:
-                logger.warning(
-                    "User attempted to send a friend request to a user who has already sent them a request"
-                )  # Log a warning message
-                return Response(
-                    {"error": "You cannot send a friend request to someone who has already sent you a request."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                existing_request_to_user = FriendRequest.objects.filter(
+                    from_user=to_user, to_user=request.user
+                ).exists()
+                if existing_request_to_user:
+                    logger.warning(
+                        "User attempted to send a friend request to a user who has already sent them a request"
+                    )  # Log a warning message
+                    return Response(
+                        {"error": "You cannot send a friend request to someone who has already sent you a request."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            existing_request_from_user = FriendRequest.objects.filter(
-                from_user=request.user, to_user=to_user
-            ).exists()
-            if existing_request_from_user:
-                logger.warning(
-                    "User attempted to send a duplicate friend request"
-                )  # Log a warning message
-                return Response(
-                    {"error": "You have already sent a friend request to this user."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                existing_request_from_user = FriendRequest.objects.filter(
+                    from_user=request.user, to_user=to_user
+                ).exists()
+                if existing_request_from_user:
+                    logger.warning(
+                        "User attempted to send a duplicate friend request"
+                    )  # Log a warning message
+                    return Response(
+                        {"error": "You have already sent a friend request to this user."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-            FriendRequest.objects.create(from_user=request.user, to_user=to_user)
-            logger.info("Friend request sent successfully")  # Log an info message
+                FriendRequest.objects.create(from_user=request.user, to_user=to_user)
+                logger.info("Friend request sent successfully")  # Log an info message
+                return Response(
+                    {"message": "Friend request sent successfully."},
+                    status=status.HTTP_201_CREATED,
+                )
+            logger.error(
+                "Invalid data provided for friend request creation"
+            )  # Log an error message
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            sentry_sdk.capture_exception(e)
             return Response(
-                {"message": "Friend request sent successfully."},
-                status=status.HTTP_201_CREATED,
+                {"error": "An unexpected error occurred."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        logger.error(
-            "Invalid data provided for friend request creation"
-        )  # Log an error message
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 class FriendRequestStatus(viewsets.ViewSet):
     """
     ViewSet for managing friend request status (accept, reject, list pending requests).
@@ -128,7 +138,8 @@ class FriendRequestStatus(viewsets.ViewSet):
                 logger.info(
                     "Friend request accepted successfully"
                 )  # Log an info message
-        except AttributeError:
+        except AttributeError as e:
+            sentry_sdk.capture_exception(e)  # Capture exception with Sentry
             logger.error(
                 "Failed to process friend request acceptance"
             )  # Log an error message
@@ -170,7 +181,8 @@ class FriendRequestStatus(viewsets.ViewSet):
                 logger.info(
                     "Friend request rejected successfully"
                 )  # Log an info message
-        except AttributeError:
+        except AttributeError as e:
+            sentry_sdk.capture_exception(e)  # Capture exception with Sentry
             logger.error(
                 "Failed to process friend request rejection"
             )  # Log an error message
@@ -185,7 +197,8 @@ class FriendRequestStatus(viewsets.ViewSet):
         # Retrieve a friend request by its ID.
         try:
             return FriendRequest.objects.get(pk=pk)
-        except FriendRequest.DoesNotExist:
+        except FriendRequest.DoesNotExist as e:
+            sentry_sdk.capture_exception(e)  # Capture exception with Sentry
             logger.error("Friend request not found")  # Log an error message
             return None
 
@@ -215,15 +228,19 @@ class CustomPagination(PageNumberPagination):
         """
         Generate paginated response.
         """
-        logger.debug("Paginated response created")  # Log a debug message
-        return Response(
-            {
-                "next": self.get_next_link(),
-                "previous": self.get_previous_link(),
-                "count": self.page.paginator.count,
-                "results": data,
-            }
-        )
+        try:
+            logger.debug("Paginated response created")  # Log a debug message
+            return Response(
+                {
+                    "next": self.get_next_link(),
+                    "previous": self.get_previous_link(),
+                    "count": self.page.paginator.count,
+                    "results": data,
+                }
+            )
+        except Exception as e:
+            sentry_sdk.capture_exception(e)  # Capture exception with Sentry
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserFilter(django_filters.FilterSet):
@@ -235,41 +252,44 @@ class UserFilter(django_filters.FilterSet):
         model = CustomUser
         fields = ["email", "username"]  # Define the fields you want to filter on
 
-
 class UserSearchViewSet(viewsets.ViewSet):
     """
     ViewSet for searching users.
     """
 
     pagination_class = CustomPagination  # Use the custom pagination class
-    filter_backends = [DjangoFilterBackend]  # Specify the filter backend
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]  # Add SearchFilter for search functionality
     filterset_class = UserFilter  # Specify the filter class
 
     def list(self, request):
         """
         List users based on search query.
         """
-        logger.info("User search request received")  # Log an info message
-        search_keyword = request.query_params.get("q")
-        if search_keyword:
-            users = CustomUser.objects.all().order_by(
-                "id"
-            )  # Example ordering by id, replace with appropriate field
-            paginator = self.pagination_class()
-
+        try:
+            logger.info("User search request received")  # Log an info message
+            
+            queryset = CustomUser.objects.all().order_by('id')
+            
+            # Apply filters if provided
+            filterset = self.filterset_class(request.query_params, queryset=queryset)
+            filtered_queryset = filterset.qs
+            
+            # Apply search filter
+            search_keyword = request.query_params.get("q")
+            if search_keyword:
+                filtered_queryset = filtered_queryset.filter(
+                    Q(username__icontains=search_keyword) | Q(email__icontains=search_keyword)
+                )
+            
             # Apply pagination
-            page = paginator.paginate_queryset(users, request)
-            if page is not None:
-                serializer = UserSignupSerializer(page, many=True)
-                return paginator.get_paginated_response(serializer.data)
-
-            serializer = UserSignupSerializer(users, many=True)
-            return Response(serializer.data)
-        else:
-            logger.warning("Search keyword is missing")  # Log a warning message
-            return Response({"error": "Search keyword 'q' is required."}, status=400)
-
-
+            paginator = self.pagination_class()
+            page = paginator.paginate_queryset(filtered_queryset, request)
+            serializer = UserSignupSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        
+        except Exception as e:
+            sentry_sdk.capture_exception(e)  # Capture exception with Sentry
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class FriendViewSet(generics.ListAPIView):
     """
     ViewSet for managing friend relationships.
@@ -281,7 +301,11 @@ class FriendViewSet(generics.ListAPIView):
 
     def get_queryset(self):
         # Get the list of friends for the authenticated user.
-        logger.info("Friend list request received")  # Log an info message
-        user = self.request.user
-        queryset = Friend.objects.filter(user=user).order_by("id")
-        return queryset
+        try:
+            logger.info("Friend list request received")  # Log an info message
+            user = self.request.user
+            queryset = Friend.objects.filter(user=user).order_by("id")
+            return queryset
+        except Exception as e:
+            sentry_sdk.capture_exception(e)  # Capture exception with Sentry
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
